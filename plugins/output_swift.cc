@@ -22,7 +22,7 @@
 #include <sstream>
 #include <string>
 
-class arepo_output_plugin : public output_plugin {
+class swift_output_plugin : public output_plugin {
 protected:
   // header/config
   std::vector<std::vector<unsigned int>> nPart;
@@ -206,6 +206,27 @@ protected:
   template <typename T> void __write_dm_mass(const grid_hierarchy &gh) {
     countLeafCells(gh);
 
+    // FINE: collect velocities and convert to correct units
+    int ilevel = gh.levelmax();
+
+    std::vector<T> data(npfine);
+    size_t count = 0;
+
+    for (unsigned i = 0; i < gh.get_grid(ilevel)->size(0); ++i)
+      for (unsigned j = 0; j < gh.get_grid(ilevel)->size(1); ++j)
+        for (unsigned k = 0; k < gh.get_grid(ilevel)->size(2); ++k)
+          if (gh.is_in_mask(ilevel, i, j, k) && !gh.is_refined(ilevel, i, j, k)) {
+            if (!doBaryons)
+                data[count++] = omega0 * rhoCrit * pow(boxSize * posFac, 3.0) / pow(2, 3 * levelmax_);
+            else
+                data[count++] = (omega0 - omega_b) * rhoCrit * pow(boxSize * posFac, 3.0) / pow(2, 3 * levelmax_);
+          }
+
+    writeHDF5_a("Masses", HIGHRES_DM_PARTTYPE, data); // write fine DM
+
+    if (count != npfine)
+      throw std::runtime_error("Internal consistency error while writing fine DM masses");
+
     // fill levelcount for header
     levelcounts = std::vector<size_t>(levelmax_ - levelmin_ + 1);
     for (int ilevel = gh.levelmax(); ilevel >= (int)gh.levelmin(); --ilevel)
@@ -281,7 +302,7 @@ protected:
             gh.cell_pos(ilevel, i, j, k, xx);
 
             xx[coord] = (xx[coord] + (*gh.get_grid(ilevel))(i, j, k)) * boxSize;
-            xx[coord] = fmod(xx[coord] + boxSize, boxSize);
+            xx[coord] = fmod(xx[coord] + boxSize, boxSize); //added fmod here (see below), otherwise only takes latter value
 
             data[count++] = (T)(xx[coord] * posFac);
           }
@@ -477,7 +498,7 @@ protected:
   }
 
 public:
-  arepo_output_plugin(config_file &cf) : output_plugin(cf) {
+  swift_output_plugin(config_file &cf) : output_plugin(cf) {
     // ensure that everyone knows we want to do SPH, implies: bsph=1, bbshift=1, decic_baryons=1
     // -> instead of just writing gas densities (which are here ignored), the gas displacements are also written
     cf.insertValue("setup", "do_SPH", "yes");
@@ -486,10 +507,10 @@ public:
     nPartTotal = std::vector<long long>(NTYPES, 0);
     massTable = std::vector<double>(NTYPES, 0.0);
 
-    coarsePartType = cf.getValueSafe<unsigned>("output", "arepo_coarsetype", COARSE_DM_DEFAULT_PARTTYPE);
-    UnitLength_in_cm = cf.getValueSafe<double>("output", "arepo_unitlength", 3.085678e21); // 1.0 kpc
-    UnitMass_in_g = cf.getValueSafe<double>("output", "arepo_unitmass", 1.989e43);         // 1.0e10 solar masses
-    UnitVelocity_in_cm_per_s = cf.getValueSafe<double>("output", "arepo_unitvel", 1e5);    // 1 km/sec
+    coarsePartType = cf.getValueSafe<unsigned>("output", "swift_coarsetype", COARSE_DM_DEFAULT_PARTTYPE);
+    UnitLength_in_cm = cf.getValueSafe<double>("output", "swift_unitlength", 3.085678e24); // 1.0 Mpc
+    UnitMass_in_g = cf.getValueSafe<double>("output", "swift_unitmass", 1.989e43);         // 1.0e10 solar masses
+    UnitVelocity_in_cm_per_s = cf.getValueSafe<double>("output", "swift_unitvel", 1e5);    // 1 km/sec
 
     omega0 = cf.getValue<double>("cosmology", "Omega_m");
     omega_b = cf.getValue<double>("cosmology", "Omega_b");
@@ -497,9 +518,9 @@ public:
     redshift = cf.getValue<double>("setup", "zstart");
     boxSize = cf.getValue<double>("setup", "boxlength");
     doBaryons = cf.getValueSafe<bool>("setup", "baryons", false);
-    useLongIDs = cf.getValueSafe<bool>("output", "arepo_longids", false);
-    numFiles = cf.getValueSafe<unsigned>("output", "arepo_num_files", 1);
-    doublePrec = cf.getValueSafe<bool>("output", "arepo_doubleprec", 0);
+    useLongIDs = cf.getValueSafe<bool>("output", "swift_longids", false);
+    numFiles = cf.getValueSafe<unsigned>("output", "swift_num_files", 1);
+    doublePrec = cf.getValueSafe<bool>("output", "swift_doubleprec", 0);
 
     for (unsigned i = 0; i < numFiles; i++)
       nPart.push_back(std::vector<unsigned int>(NTYPES, 0));
@@ -507,11 +528,11 @@ public:
     // factors which multiply positions and velocities
     time = 1.0 / (1.0 + redshift);
     posFac = 3.085678e24 / UnitLength_in_cm; // MUSIC uses Mpc internally, i.e. posFac=1e3 for kpc output
-    velFac = (1.0f / sqrt(time)) * boxSize;
+    velFac = boxSize;
 
     // critical density
-    rhoCrit = 27.7519737e-9; // in h^2 1e10 M_sol / kpc^3
-    rhoCrit *= pow(UnitLength_in_cm / 3.085678e21, 3.0);
+    rhoCrit = 27.7519737; // in h^2 1e10 M_sol / Mpc^3
+    rhoCrit *= pow(UnitLength_in_cm / 3.085678e24, 3.0);
     rhoCrit *= (1.989e43 / UnitMass_in_g);
 
     // calculate PMGRID suggestion
@@ -546,6 +567,9 @@ public:
     double adec = 1.0 / (160.0 * pow(omega_b * h2 / 0.022, 2.0 / 5.0));
     double Tcmb0 = 2.726;
 
+    rhoCrit *= h2;
+    posFac /= hubbleParam;
+
     Tini = astart < adec ? Tcmb0 / astart : Tcmb0 / astart / astart * adec;
 
     // calculate softening suggestion
@@ -559,7 +583,7 @@ public:
           (omega0 - omega_b) * rhoCrit * pow(boxSize * posFac, 3.0) / pow(2, 3 * levelmax_);
 
     if (coarsePartType == GAS_PARTTYPE || coarsePartType == HIGHRES_DM_PARTTYPE)
-      throw std::runtime_error("Error: Specified illegal Arepo particle type for coarse particles.");
+      throw std::runtime_error("Error: Specified illegal Swift particle type for coarse particles.");
     if (coarsePartType == STAR_PARTTYPE)
       LOGWARN("WARNING: Specified coarse particle type will collide with stars if USE_SFR enabled.");
 
@@ -599,7 +623,7 @@ public:
     }
   }
 
-  ~arepo_output_plugin() {}
+  ~swift_output_plugin() {}
 
   /* ------------------------------------------------------------------------------- */
   void write_dm_mass(const grid_hierarchy &gh) {
@@ -666,7 +690,7 @@ public:
     }
 
     // output particle counts
-    std::cout << " - Arepo : wrote " << nPartTotAllTypes << " particles..." << std::endl;
+    std::cout << " - Swift : wrote " << nPartTotAllTypes << " particles..." << std::endl;
     for (size_t i = 0; i < nPartTotal.size(); i++)
       std::cout << "    type [" << i << "] : " << std::setw(12) << nPartTotal[i] << std::endl;
     std::cout << std::endl;
@@ -685,17 +709,29 @@ public:
         std::cout << std::endl;
       }
 
+      // Write UNITS header using the physical constants assumed internally by SWIFT
+      HDFCreateGroup(filename, "Units");
+      HDFWriteGroupAttribute(filename, "Units", "Unit mass in cgs (U_M)", 1.98841e43);         // 10^10 Msun in grams
+      HDFWriteGroupAttribute(filename, "Units", "Unit length in cgs (U_L)", 3.08567758149e24); // 1 Mpc in cm
+      HDFWriteGroupAttribute(filename, "Units", "Unit time in cgs (U_t)", 3.08567758149e19);   // so that unit vel is 1 km/s
+      HDFWriteGroupAttribute(filename, "Units", "Unit current in cgs (U_I)", 1.0);             // 1 Ampere
+      HDFWriteGroupAttribute(filename, "Units", "Unit temperature in cgs (U_T)", 1.0);         // 1 Kelvin
+
       HDFCreateGroup(filename, "Header");
 
       HDFWriteGroupAttribute(filename, "Header", "NumPart_ThisFile", nPart[i]);
       HDFWriteGroupAttribute(filename, "Header", "NumPart_Total", nPartTotalLW);
       HDFWriteGroupAttribute(filename, "Header", "NumPart_Total_HighWord", nPartTotalHW);
+      HDFWriteGroupAttribute(filename, "Header", "NumPartTypes", massTable.size());
       HDFWriteGroupAttribute(filename, "Header", "MassTable", massTable);
-      HDFWriteGroupAttribute(filename, "Header", "BoxSize", boxSize);
+      HDFWriteGroupAttribute(filename, "Header", "InitialMassTable", massTable);
+      HDFWriteGroupAttribute(filename, "Header", "BoxSize", boxSize / hubbleParam); //might prefer / hubble_param OR have Swift deal with h factors
       HDFWriteGroupAttribute(filename, "Header", "NumFilesPerSnapshot", numFiles);
+      HDFWriteGroupAttribute(filename, "Header", "Dimension", 3);
       HDFWriteGroupAttribute(filename, "Header", "Time", time);
       HDFWriteGroupAttribute(filename, "Header", "Redshift", redshift);
-      HDFWriteGroupAttribute(filename, "Header", "Omega0", omega0);
+      HDFWriteGroupAttribute(filename, "Header", "Scale-factor", redshift);
+      HDFWriteGroupAttribute(filename, "Header", "Omega0", omega0); //this might be CDM plus baryons
       HDFWriteGroupAttribute(filename, "Header", "OmegaLambda", omega_L);
       HDFWriteGroupAttribute(filename, "Header", "OmegaBaryon", omega_b);
       HDFWriteGroupAttribute(filename, "Header", "HubbleParam", hubbleParam);
@@ -708,43 +744,72 @@ public:
       HDFWriteGroupAttribute(filename, "Header", "Music_levelmin", levelmin_);
       HDFWriteGroupAttribute(filename, "Header", "Music_levelmax", levelmax_);
       HDFWriteGroupAttribute(filename, "Header", "Music_levelcounts", levelcounts);
-      HDFWriteGroupAttribute(filename, "Header", "haveBaryons", (int)doBaryons);
       HDFWriteGroupAttribute(filename, "Header", "longIDs", (int)useLongIDs);
       HDFWriteGroupAttribute(filename, "Header", "suggested_pmgrid", pmgrid);
-      HDFWriteGroupAttribute(filename, "Header", "suggested_gridboost", gridboost);
+    //   HDFWriteGroupAttribute(filename, "Header", "suggested_gridboost", gridboost);
       HDFWriteGroupAttribute(filename, "Header", "suggested_highressoft", softening);
-      HDFWriteGroupAttribute(filename, "Header", "suggested_gas_Tinit", Tini);
+    //   HDFWriteGroupAttribute(filename, "Header", "suggested_gas_Tinit", Tini);
       HDFWriteGroupAttribute(filename, "Header", "Flag_Entropy_ICs", 0);
+      HDFWriteGroupAttribute(filename, "Header", "Virtual", 0);
+      HDFWriteGroupAttribute(filename, "Header", "ThisFile", i);
+      HDFWriteGroupAttribute(filename, "Header", "TimeBase_dloga", 3.20238316e-17); // copied this from first snapshot of swift agora sim 
+      HDFWriteGroupAttribute(filename, "Header", "TimeBase_dt", 5.91490951e-20); // same as above
+
+      HDFCreateGroup(filename, "ICs_parameters");
+      HDFWriteGroupAttribute(filename, "ICs_parameters", "Code", std::string("MUSIC-Panphasia"));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Git Revision", std::string(GIT_REV));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Git Tag", std::string(GIT_TAG));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Git Branch", std::string(GIT_BRANCH));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Precision", std::string(CMAKE_PRECISION_STR));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Convolutions", std::string(CMAKE_CONVOLVER_STR));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "PLT", std::string(CMAKE_PLT_STR));
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "LPT Order", order);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Particle Load", load);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Transfer Function", tf);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Cosmology Parameter Set", cosmo_set);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Random Generator", rng);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Mode Fixing", do_fixing);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Mode inversion", do_invert);
+      HDFWriteGroupAttribute(filename, "ICs_parameters", "Baryons", (int)doBaryons);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Baryons Relative Velocity", do_baryonsVrel);
+    //   HDFWriteGroupAttribute(fname_, "ICs_parameters", "Grid Resolution", L);
+
+    HDFCreateGroup(filename, "Cosmology");
+    HDFWriteGroupAttribute(filename, "Cosmology", "Omega_b", omega_b);
+    HDFWriteGroupAttribute(filename, "Cosmology", "Omega_cdm", omega0 - omega_b); //since omega0 + omega_L = 1
+    HDFWriteGroupAttribute(filename, "Cosmology", "Omega_lambda", omega_L);
+    HDFWriteGroupAttribute(filename, "Cosmology", "h", hubbleParam);
+
     }
 
     // give config/parameter file hints
     if (useLongIDs)
-      std::cout << " - Arepo: Wrote 64bit IDs, enable LONGIDS." << std::endl;
+      std::cout << " - Swift: Wrote 64bit IDs, enable LONGIDS." << std::endl;
     if (doublePrec)
-      std::cout << " - Arepo: Double precision ICs, set INPUT_IN_DOUBLEPRECISION." << std::endl;
+      std::cout << " - Swift: Double precision ICs, set INPUT_IN_DOUBLEPRECISION." << std::endl;
     if (NTYPES != 6)
-      std::cout << " - Arepo: Using [" << NTYPES << "] particle types, set NTYPES to match." << std::endl;
+      std::cout << " - Swift: Using [" << NTYPES << "] particle types, set NTYPES to match." << std::endl;
     if (doBaryons)
-      std::cout << " - Arepo: Wrote high-res gas (only), set REFINEMENT_HIGH_RES_GAS and GENERATE_GAS_IN_ICS with "
+      std::cout << " - Swift: Wrote high-res gas (only), set REFINEMENT_HIGH_RES_GAS and GENERATE_GAS_IN_ICS with "
                 << "SPLIT_PARTICLE_TYPE=" << pow(2, coarsePartType) << "." << std::endl;
     if (levelmax_ != levelmin_)
-      std::cout << " - Arepo: Have zoom type ICs, set PLACEHIGHRESREGION=" << pow(2, HIGHRES_DM_PARTTYPE)
+      std::cout << " - Swift: Have zoom type ICs, set PLACEHIGHRESREGION=" << pow(2, HIGHRES_DM_PARTTYPE)
                 << " (suggest PMGRID=" << pmgrid << " with GRIDBOOST=" << gridboost << ")." << std::endl;
     else
-      std::cout << " - Arepo: Have unigrid type ICs (suggest PMGRID=" << pmgrid << ")." << std::endl;
+      std::cout << " - Swift: Have unigrid type ICs (suggest PMGRID=" << pmgrid << ")." << std::endl;
     if (levelmax_ > levelmin_ + 1)
-      std::cout << " - Arepo: More than one coarse DM mass using same type, set INDIVIDUAL_GRAVITY_SOFTENING="
+      std::cout << " - Swift: More than one coarse DM mass using same type, set INDIVIDUAL_GRAVITY_SOFTENING="
                 << pow(2, coarsePartType) << " (+" << pow(2, STAR_PARTTYPE) << " if including stars)." << std::endl;
     if (doBaryons)
-      std::cout << " - Arepo: Set initial gas temperature to " << std::fixed << std::setprecision(3) << Tini << " K."
+      std::cout << " - Swift: Set initial gas temperature to " << std::fixed << std::setprecision(3) << Tini << " K."
                 << std::endl;
-    std::cout << " - Arepo: Suggest grav softening = " << std::setprecision(3) << softening << " for high res DM."
+    std::cout << " - Swift: Suggest grav softening = " << std::setprecision(3) << softening << " for high res DM."
               << std::endl;
   }
 };
 
 namespace {
-output_plugin_creator_concrete<arepo_output_plugin> creator("arepo");
+output_plugin_creator_concrete<swift_output_plugin> creator("swift");
 }
 
 #endif // HAVE_HDF5

@@ -1,0 +1,8 @@
+*.conf
+.vscode/
+MUSIC
+*.o
+*.patch
+test/
+Eagle_camb_file_wide
+*.txt

@@ -109,7 +109,11 @@ template <typename m1, typename m2> void fft_coarsen(m1 &v, m2 &V) {
 
         std::complex<real_t> val_phas(cos(phase), sin(phase));
 
+#ifdef SINGLE_PRECISION        
+        val_fine *= val_phas * fftnorm / 8.0f; // sqrt(8.0);
+#else 
         val_fine *= val_phas * fftnorm / 8.0; // sqrt(8.0);
+#endif
 
         RE(ccoarse[qc]) = val_fine.real();
         IM(ccoarse[qc]) = val_fine.imag();

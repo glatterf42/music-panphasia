@@ -337,9 +337,9 @@ void RNG_panphasia::fill_grid(int level, DensityGrid<real_t> &R) {
   LOGINFO("ileft_corner_p[0,1,2]  = (%d,%d,%d)",ileft_corner_p[0],ileft_corner_p[1],ileft_corner_p[2]);   
   LOGINFO("nxremap[0,1,2]  = (%d,%d,%d)",nxremap[0],nxremap[1],nxremap[2]);
 
-  size_t ngp = nxremap[0] * nxremap[1] * (nxremap[2] + 2);
+  size_t ngp = (size_t)nxremap[0] * (size_t)nxremap[1] * (size_t)(nxremap[2] + 2); //size_t should be long unsigned int
 
-  pr0 = new fftw_real[ngp];
+  pr0 = new fftw_real[ngp]; //fftw_real is either double or float depending on SINGLEPRECISION being set.
   pr1 = new fftw_real[ngp];
   pr2 = new fftw_real[ngp];
   pr3 = new fftw_real[ngp];

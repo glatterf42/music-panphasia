@@ -11,16 +11,17 @@ BOXLIB_HOME     = ${HOME}/nyx_tot_sterben/BoxLib
 
 ##############################################################################
 ### compiler and path settings
-CC      = g++-11 ## icpc
-FF	= gfortran-11 # needed only for panphasia, or ## ifort
+CC      = g++ ## icpc
+FF	= gfortran-11# needed only for panphasia, or ## ifort
 LINKER	= g++-11 ## ifort # need to link with ifort if using intel
 OPT     = -Wall -Wno-unknown-pragmas -O3 -mtune=native #-fsanitize=address -fno-omit-frame-pointer
 CFLAGS  =  
-LFLAGS  = -lgsl -lgslcblas -fsanitize=thread # -fsanitize=address -fno-omit-frame-pointer
+LFLAGS  = -lgsl -lgslcblas #-fsanitize=thread  #-fsanitize=address -fno-omit-frame-pointer
 FFLAGS  = -ffixed-line-length-132 -O3 -fimplicit-none -g #-fsanitize=address -fno-omit-frame-pointer## use for gfortran
 #FFLAGS = -extend_source -O3 -fimplicit-none -g ## use for ifort
-CPATHS  = -I. -I$(HOME)/local/include -I/opt/local/include -I/usr/local/include
-LPATHS  = -L$(HOME)/local/lib -L/opt/local/lib -L/usr/local/lib
+CPATHS  = -I. -I$(HOME)/local/include -I/opt/local/include -I/usr/local/include -I/usr/include/hdf5/serial
+LPATHS  = -L$(HOME)/local/lib -L/opt/local/lib -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu/hdf5/serial 
+
 
 ##############################################################################
 # if you have FFTW 2.1.5 or 3.x with multi-thread support, you can enable the 
