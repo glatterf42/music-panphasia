@@ -6,3 +6,5 @@ MUSIC
 test/
 Eagle_camb_file_wide
 *.txt
+*.mod
+.idea/
