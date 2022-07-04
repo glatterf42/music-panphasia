@@ -592,6 +592,8 @@ public:
 
   void write_gas_potential( const grid_hierarchy& gh )
   { }
+  void write_gas_properties( const grid_hierarchy& gh )
+  { }
 
 
   void write_gas_velocity( int coord, const grid_hierarchy& gh )

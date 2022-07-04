@@ -820,6 +820,7 @@ public:
 
   void write_gas_density(const grid_hierarchy &gh) {}
   void write_gas_potential(const grid_hierarchy &gh) {}
+  void write_gas_properties( const grid_hierarchy& gh ) {}
 
   void finalize(void) {
     this->write_header_file();

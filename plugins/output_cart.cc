@@ -795,6 +795,8 @@ class cart_output_plugin : public output_plugin
 
 		void write_gas_position( int coord, const grid_hierarchy& gh ) {}
 
+		void write_gas_properties( const grid_hierarchy& gh ){} //... we don't care about gas properties for art  
+
 		void write_gas_velocity( int coord, const grid_hierarchy& gh )
 		{
 			size_t nptot = gh.count_leaf_cells(gh.levelmin(), gh.levelmax());

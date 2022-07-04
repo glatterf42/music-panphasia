@@ -654,6 +654,11 @@ public:
   void write_gas_potential(const grid_hierarchy &gh) { /* skip */
   }
 
+  void write_gas_properties( const grid_hierarchy& gh )
+  {
+    //... we don't care about gas properties for Arepo  
+  }
+
   void finalize(void) {
     // generate and add contiguous IDs for each particle type we have written
     generateAndWriteIDs();

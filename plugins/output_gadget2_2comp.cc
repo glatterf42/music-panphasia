@@ -1305,7 +1305,9 @@ public:
 	
 	void write_gas_potential( const grid_hierarchy& gh )
 	{ }
-	
+
+	void write_gas_properties( const grid_hierarchy& gh )
+  	{ }
 	
 	
 	//... write data for gas -- don't do this

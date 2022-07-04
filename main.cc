@@ -631,6 +631,10 @@ nthreads = omp_get_max_threads();
 				std::cout << "=============================================================\n";
 				std::cout << "   COMPUTING BARYON DENSITY\n";
 				std::cout << "-------------------------------------------------------------\n";
+				if( outformat == "swift"){
+					LOGUSER("Writing baryon data as particle attributes...");
+					the_output_plugin->write_gas_properties(f);
+				}
 				LOGUSER("Computing baryon density...");
 				GenerateDensityHierarchy(	cf, the_transfer_function_plugin, baryon , rh_TF, rand, f, false, bbshift );
 				coarsen_density(rh_Poisson, f, bspectral_sampling);
@@ -900,6 +904,12 @@ nthreads = omp_get_max_threads();
 				the_output_plugin->write_dm_mass(f);
 			}
 
+			// //For our current use with Richings, this is unnecessary here. Only leaving it b/c we might need it everywhere we also write_dm_mass.
+			// if( do_baryons && outformat == "swift"){
+			// 		LOGUSER("Writing baryon data as particle attributes...");
+			// 		the_output_plugin->write_gas_properties(f);
+			// 	}
+
 			u1 = f;	u1.zero();
 
 			//... compute 1LPT term
@@ -1076,6 +1086,11 @@ nthreads = omp_get_max_threads();
 				the_output_plugin->write_dm_density(f);
 				the_output_plugin->write_dm_mass(f);
 				u1 = f;	u1.zero();
+
+				if( do_baryons && outformat == "swift"){
+					LOGUSER("Writing baryon data as particle attributes...");
+					the_output_plugin->write_gas_properties(f);
+				}
 
 				if(bdefd)
 					f2LPT=f;

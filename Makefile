@@ -16,10 +16,10 @@ FF	= gfortran-11# needed only for panphasia, or ## ifort
 LINKER	= g++-11 ## ifort # need to link with ifort if using intel
 OPT     = -Wall -Wno-unknown-pragmas -O3 -mtune=native #-fsanitize=address -fno-omit-frame-pointer
 CFLAGS  =  
-LFLAGS  = -lgsl -lgslcblas #-fsanitize=thread  #-fsanitize=address -fno-omit-frame-pointer
+LFLAGS  = -lgsl -lgslcblas -ltirpc #-fsanitize=thread  #-fsanitize=address -fno-omit-frame-pointer
 FFLAGS  = -ffixed-line-length-132 -O3 -fimplicit-none -g #-fsanitize=address -fno-omit-frame-pointer## use for gfortran
 #FFLAGS = -extend_source -O3 -fimplicit-none -g ## use for ifort
-CPATHS  = -I. -I$(HOME)/local/include -I/opt/local/include -I/usr/local/include -I/usr/include/hdf5/serial
+CPATHS  = -I. -I$(HOME)/local/include -I/opt/local/include -I/usr/local/include -I/usr/include/hdf5/serial -I/usr/include/tirpc
 LPATHS  = -L$(HOME)/local/lib -L/opt/local/lib -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu/hdf5/serial 
 
 

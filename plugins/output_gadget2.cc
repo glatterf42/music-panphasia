@@ -1226,6 +1226,11 @@ public:
   {
     //... we don't care about gas potential for Gadget  
   }
+
+  void write_gas_properties( const grid_hierarchy& gh )
+  {
+    //... we don't care about gas properties for Gadget  
+  }
   
   //... write data for gas -- don't do this
   void write_gas_velocity( int coord, const grid_hierarchy& gh )

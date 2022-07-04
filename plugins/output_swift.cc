@@ -46,6 +46,7 @@ protected:
   // parameter file hints
   int pmgrid, gridboost;
   float softening, Tini;
+  double gamma, YHe, Tcmb0; //for gas properties
 
   using output_plugin::cf_;
 
@@ -497,6 +498,38 @@ protected:
     writeHDF5_b("Coordinates", coord, GAS_PARTTYPE, data); // write highres gas
   }
 
+  template <typename T> void __write_gas_properties(const grid_hierarchy &gh) {
+    countLeafCells(gh);
+
+    std::vector<T> masses(npfine);
+    std::vector<T> smoothing_lengths(npfine);
+    std::vector<T> internal_energies(npfine);
+
+    T gas_mass = omega_b * rhoCrit * pow(boxSize * posFac, 3.0) / pow(2, 3 * levelmax_);
+    T smoothing_length = boxSize / hubbleParam / pow(2, levelmax_);
+
+    // calculate internal energy for gas
+    double npol = (fabs(1.0 - gamma) > 1e-7) ? 1.0 / (gamma - 1.) : 1.0;
+    double astart = 1.0 / (1.0 + redshift);
+    double h2 = hubbleParam * hubbleParam;
+    double adec = 1.0 / (160.0 * pow(omega_b * h2 / 0.022, 2.0 / 5.0));
+
+    Tini = astart < adec ? Tcmb0 / astart : Tcmb0 / astart / astart * adec;
+
+    const double mu = (Tini > 1.e4) ? 4.0 / (8. - 5. * YHe) : 4.0 / (1. + 3. * (1. - YHe));
+    T internal_energy = 1.3806e-16 / 1.6726e-24 * Tini * npol / mu / UnitVelocity_in_cm_per_s / UnitVelocity_in_cm_per_s;
+
+    for (size_t i = 0; i < npfine; i++){
+      masses[i] = gas_mass;
+      smoothing_lengths[i] = smoothing_length;
+      internal_energies[i] = internal_energy;
+    }
+
+    writeHDF5_a("Masses", GAS_PARTTYPE, masses); // write gas masses and other data
+    writeHDF5_a("SmoothingLength", GAS_PARTTYPE, smoothing_lengths);
+    writeHDF5_a("InternalEnergy", GAS_PARTTYPE, internal_energies);
+  }
+
 public:
   swift_output_plugin(config_file &cf) : output_plugin(cf) {
     // ensure that everyone knows we want to do SPH, implies: bsph=1, bbshift=1, decic_baryons=1
@@ -561,11 +594,13 @@ public:
 
     // calculate Tini for gas
     hubbleParam = cf.getValue<double>("cosmology", "H0") / 100.0;
+    Tcmb0 = cf.getValueSafe<double>("cosmology", "Tcmb0", 2.7255); //from monofonIC Planck2018EE+BAO+SN
+    gamma = cf.getValueSafe<double>("cosmology", "gamma", 5.0 / 3.0);
+    YHe = cf.getValueSafe<double>("cosmology", "YHe", 0.245421); //from monofonIC Planck2018EE+BAO+SN
 
     double astart = 1.0 / (1.0 + redshift);
     double h2 = hubbleParam * hubbleParam;
     double adec = 1.0 / (160.0 * pow(omega_b * h2 / 0.022, 2.0 / 5.0));
-    double Tcmb0 = 2.726;
 
     rhoCrit *= h2;
     posFac /= hubbleParam;
@@ -666,6 +701,13 @@ public:
       __write_gas_position<float>(coord, gh);
     else
       __write_gas_position<double>(coord, gh);
+  }
+
+  void write_gas_properties(const grid_hierarchy &gh) {
+    if (!doublePrec)
+      __write_gas_properties<float>(gh);
+    else
+      __write_gas_properties<double>(gh);
   }
 
   void write_gas_density(const grid_hierarchy &gh) {

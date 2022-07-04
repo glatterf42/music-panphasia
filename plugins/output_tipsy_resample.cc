@@ -1157,6 +1157,11 @@ public:
         //... we don't care about baryon potential for TIPSY
     }
 
+    void write_gas_properties( const grid_hierarchy& gh )
+    {
+        //... we don't care about gas properties for TIPSY  
+    }
+
     //... write data for gas
     void write_gas_velocity (int coord, const grid_hierarchy & gh)
     {
